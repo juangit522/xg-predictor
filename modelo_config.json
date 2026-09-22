@@ -1,0 +1,46 @@
+{
+  "_version": 3,
+  "dixon_coles": {
+    "calibrado_en": "2026-09-22 10:20:12",
+    "metadata": {
+      "ligas": [
+        "premier",
+        "laliga",
+        "bundesliga"
+      ],
+      "n_partidos": 2843,
+      "rps": 0.19957,
+      "temporadas": [
+        "2324",
+        "2425",
+        "2526"
+      ]
+    },
+    "parametros": {
+      "k": 6.0,
+      "rho": -0.12
+    }
+  },
+  "principal": {
+    "calibrado_en": "2026-09-22 10:19:53",
+    "metadata": {
+      "ligas": [
+        "premier",
+        "laliga",
+        "bundesliga"
+      ],
+      "n_partidos": 2843,
+      "rps": 0.204367,
+      "temporadas": [
+        "2324",
+        "2425",
+        "2526"
+      ]
+    },
+    "parametros": {
+      "k": 6.0,
+      "w": 1.0,
+      "xi": 0.001
+    }
+  }
+}

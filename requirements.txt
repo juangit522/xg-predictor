@@ -1,0 +1,24 @@
+# Dependencias para desplegar app.py en Streamlit Community Cloud.
+# Versiones ancladas a las que se probaron end-to-end en este proyecto
+# (predicciones, backtest, descarga real de datos) antes de desplegar.
+#
+# streamlit y pandas son obligatorios: sin ellos app.py no arranca.
+#
+# soccerdata es OPCIONAL en tiempo de ejecucion: xg_loader.py solo lo
+# importa dentro de las funciones que descargan de Understat (nunca al
+# inicio del modulo), asi que si el cache/ ya trae los CSV de xG
+# commiteados al repo, la app funciona en modo "xG real" sin necesitar
+# soccerdata en absoluto -- solo hace falta si el usuario aprieta
+# "Actualizar datos" o pide una combinacion de liga/temporadas que no
+# esta en el cache. Se incluye igual para que esa funcion no falle con
+# un error de dependencia faltante en el servidor.
+streamlit==1.64.0
+pandas==3.0.5
+
+# Descarga de xG desde Understat (scraping). El "Actualizar datos" con
+# fuente "xG real" puede ser lento o fallar en la nube si Understat
+# limita el trafico desde IPs de datacenter -- ver notas de despliegue.
+# Si preferis un build mas liviano y no te importa perder esa funcion
+# en la nube (las predicciones siguen andando con el cache commiteado),
+# comenta o borra esta linea.
+soccerdata==1.9.1
