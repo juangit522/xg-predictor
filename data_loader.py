@@ -102,8 +102,11 @@ def descargar_csv(codigo, temporada, forzar=False):
             logger.info("descargando %s (intento %s/%s)", url, intento + 1,
                      DESCARGA_REINTENTOS)
             datos = urllib.request.urlopen(req, timeout=30).read()
-            with open(destino, "wb") as f:
+            # Temporal + rename: la app puede estar leyendo este CSV
+            # mientras el hilo de actualizacion lo vuelve a bajar.
+            with open(destino + ".tmp", "wb") as f:
                 f.write(datos)
+            os.replace(destino + ".tmp", destino)
             return destino
         except Exception as e:
             ultimo_error = e

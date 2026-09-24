@@ -1,0 +1,11 @@
+# Config del servidor Streamlit (la lee tanto Streamlit Community Cloud
+# como `streamlit run` local y el contenedor Docker).
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"

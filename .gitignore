@@ -19,3 +19,6 @@ _understat_raw.pkl
 # a proposito (ver instrucciones de despliegue): sin cache/ la app
 # depende de descargar todo en vivo la primera vez que alguien la abre
 # en la nube, lo cual es lento y menos confiable.
+
+# Temporales de escritura atomica (cache/*.csv.tmp) si un proceso se corta
+*.tmp

@@ -12,11 +12,12 @@ O doble clic en iniciar_app.bat (Windows) -- ver ese archivo.
 """
 
 import os
-from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
+import actualizador
+from actualizador import temporadas_recientes
 from data_loader import LIGAS, RHO_LIGA, cargar
 from poisson_model import (
     predecir, prob_a_cuota, K_SHRINK, K_SHRINK_XG, RHO,
@@ -32,26 +33,24 @@ NOMBRES_LIGA = {k: v[1] for k, v in LIGAS.items()}
 UMBRAL_VALUE_BET = 0.02  # 2% de ventaja minima para marcar "value bet"
 
 
-def temporadas_recientes(n=3):
-    """Las n ultimas temporadas completas, formato '2526'.
-
-    Espejo de backtest.temporadas_por_defecto(): se reimplementa aqui
-    (en vez de importarla) para no arrastrar la dependencia de
-    concurrent.futures de backtest.py solo por esta funcion pura.
-    """
-    hoy = datetime.now()
-    ultimo = hoy.year - 1 if hoy.month >= 8 else hoy.year - 2
-    return ["{:02d}{:02d}".format((ultimo - i) % 100, (ultimo - i + 1) % 100)
-            for i in range(n - 1, -1, -1)]
+@st.cache_resource
+def obtener_actualizador():
+    """Un solo hilo de actualizacion por proceso, compartido por todas las
+    sesiones (st.cache_resource lo crea una vez y lo reutiliza)."""
+    return actualizador.Actualizador().iniciar()
 
 
-@st.cache_data(show_spinner="Descargando y calculando fuerzas de la liga...")
-def cargar_datos(liga_key, temporadas, fuente, forzar=False):
-    return cargar(liga_key, list(temporadas), fuente=fuente, forzar=forzar)
+# `firma` (mtimes de los archivos de cache, ver actualizador.firma) es parte
+# de la clave del cache: cuando el hilo de fondo regenera los datos, la
+# firma cambia y la proxima llamada recalcula sola. No lleva "_" delante
+# a proposito: Streamlit excluye de la clave los argumentos con "_".
+@st.cache_data(show_spinner="Calculando fuerzas de la liga...")
+def cargar_datos(liga_key, temporadas, fuente, firma):
+    return cargar(liga_key, list(temporadas), fuente=fuente)
 
 
 @st.cache_data(show_spinner="Calculando ranking Elo...")
-def cargar_elo(liga_key, temporadas, fuente):
+def cargar_elo(liga_key, temporadas, fuente, firma):
     from fuentes import obtener_fuente
     partidos = obtener_fuente(fuente).partidos(liga_key, list(temporadas))
     partidos.sort(key=lambda p: (p["fecha"], p["local"]))
@@ -124,25 +123,66 @@ with st.sidebar:
         st.caption("Conviene relanzar backtest.py --guardar-config")
 
     st.divider()
+    act = obtener_actualizador()
+    tarea = (liga_key, temporadas, fuente)
+    firma = actualizador.firma(*tarea)
+    if None in firma and tarea not in act.estado()["errores"]:
+        # Combinacion sin cache todavia (p.ej. arranco una temporada nueva):
+        # se descarga en segundo plano en vez de congelar la pagina minutos.
+        # Si ya fallo no se reencola sola (evita un bucle de reintentos);
+        # el boton de abajo permite reintentar a mano.
+        act.solicitar(tarea, forzar=False)
     if st.button("\U0001f504 Actualizar datos", width='stretch',
-                help="Vuelve a descargar los datos de la competicion y fuente "
-                     "seleccionadas arriba, ignorando el cache en disco."):
-        cargar_datos.clear()
-        cargar_elo.clear()
-        with st.spinner("Descargando datos actualizados..."):
-            try:
-                cargar_datos(liga_key, temporadas, fuente, forzar=True)
-                st.toast("Datos actualizados", icon="✅")
-            except SystemExit as e:
-                st.error(f"No se pudo actualizar: {e}")
-        st.rerun()
+                disabled=act.ocupado_con(tarea),
+                help="Vuelve a descargar en segundo plano los datos de la "
+                     "competicion y fuente seleccionadas. La app sigue "
+                     "usable mientras tanto y se refresca sola al terminar."):
+        act.solicitar(tarea, forzar=True)
+        st.toast("Actualizacion iniciada en segundo plano", icon="\U0001f504")
+
+    def panel_actualizacion(firma_mostrada, ocupado_al_dibujar):
+        est = act.estado()
+        # Datos nuevos en disco, o el trabajo termino (bien o mal): rerun
+        # completo para recargar y para apagar este sondeo.
+        if (actualizador.firma(*tarea) != firma_mostrada
+                or (ocupado_al_dibujar and not est["ocupado"])):
+            st.rerun()
+        if est["actual"]:
+            st.caption("⏳ Actualizando " + actualizador.etiqueta(est["actual"])
+                       + (f" · {est['pendientes']} en cola" if est["pendientes"] else ""))
+        elif est["pendientes"]:
+            st.caption(f"⏳ {est['pendientes']} actualizacion(es) en cola")
+        elif est["ultima_ok"]:
+            t, cuando = est["ultima_ok"]
+            st.caption(f"Ultima actualizacion: {actualizador.etiqueta(t)}, "
+                       f"{cuando:%d/%m %H:%M}")
+        if tarea in est["errores"]:
+            mensaje, cuando = est["errores"][tarea]
+            st.warning(f"La ultima actualizacion de esta seleccion fallo "
+                       f"({cuando:%d/%m %H:%M}); se muestran los datos anteriores.\n\n"
+                       f"{mensaje[:300]}")
+
+    # Solo sondea (cada 3s, sin recargar la pagina entera) mientras hay
+    # trabajo en curso; en reposo el panel es estatico.
+    ocupado = act.estado()["ocupado"]
+    st.fragment(run_every=3 if ocupado else None)(panel_actualizacion)(firma, ocupado)
 
 
 # ----------------------------------------------------------------------
 # CARGA DE DATOS (comun a ambas pestanas)
 # ----------------------------------------------------------------------
+if None in firma:
+    if tarea in act.estado()["errores"] and not act.ocupado_con(tarea):
+        st.error(f"No se pudieron descargar los datos de {NOMBRES_LIGA[liga_key]}: "
+                 f"{act.estado()['errores'][tarea][0]}")
+    else:
+        st.info(f"Descargando por primera vez los datos de {NOMBRES_LIGA[liga_key]} "
+                f"({', '.join(temporadas)}) en segundo plano. La pagina se "
+                f"actualiza sola cuando esten listos.")
+    st.stop()
+
 try:
-    liga, equipos, crudos, n_partidos = cargar_datos(liga_key, temporadas, fuente)
+    liga, equipos, crudos, n_partidos = cargar_datos(liga_key, temporadas, fuente, firma)
 except SystemExit as e:
     st.error(f"No se pudieron cargar los datos de {NOMBRES_LIGA[liga_key]}: {e}")
     st.stop()
@@ -305,7 +345,7 @@ with tab_diagnostico:
     st.caption("Fuerza general de cada equipo (ver elo.py). Complementa, no "
               "reemplaza, las fuerzas ataque/defensa del modelo Poisson.")
     try:
-        elo = cargar_elo(liga_key, temporadas, fuente)
+        elo = cargar_elo(liga_key, temporadas, fuente, firma)
         df_elo = pd.DataFrame(elo.tabla(), columns=["Equipo", "Elo"])
         df_elo.index = df_elo.index + 1
         df_elo["Elo"] = df_elo["Elo"].round(1)

@@ -1,0 +1,58 @@
+# Refresca el cache/ commiteado una vez por semana (y a mano desde la
+# pestana Actions). Streamlit Community Cloud redespliega solo al ver el
+# push, asi que la app arranca siempre con datos recientes aunque el hilo
+# de actualizacion de la app haya estado dormido (la nube duerme las apps
+# sin visitas y los archivos escritos en ejecucion se pierden al reiniciar).
+name: Actualizar datos
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # lunes 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-datos
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+
+      - name: Descargar datos
+        # Si falla alguna liga igual se commitea lo que si se actualizo;
+        # el fallo queda marcado en rojo en el resumen del job.
+        id: descarga
+        continue-on-error: true
+        run: python actualizador.py --forzar
+
+      - name: Commitear cache si cambio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cache/
+          if git diff --cached --quiet; then
+            echo "Sin cambios en cache/"
+          else
+            git commit -m "chore(datos): actualizar cache $(date -u +%F)"
+            git push
+          fi
+
+      - name: Marcar fallo de descarga
+        if: steps.descarga.outcome == 'failure'
+        run: |
+          echo "::warning::Alguna tarea de descarga fallo; ver el paso 'Descargar datos'"
+          exit 1

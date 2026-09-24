@@ -1,24 +1,24 @@
-# Dependencias para desplegar app.py en Streamlit Community Cloud.
+# Dependencias para desplegar app.py (Streamlit Community Cloud, Docker
+# o cualquier host con Python >= 3.11 -- pandas 3 no soporta menos).
 # Versiones ancladas a las que se probaron end-to-end en este proyecto
 # (predicciones, backtest, descarga real de datos) antes de desplegar.
 #
 # streamlit y pandas son obligatorios: sin ellos app.py no arranca.
-#
-# soccerdata es OPCIONAL en tiempo de ejecucion: xg_loader.py solo lo
-# importa dentro de las funciones que descargan de Understat (nunca al
-# inicio del modulo), asi que si el cache/ ya trae los CSV de xG
-# commiteados al repo, la app funciona en modo "xG real" sin necesitar
-# soccerdata en absoluto -- solo hace falta si el usuario aprieta
-# "Actualizar datos" o pide una combinacion de liga/temporadas que no
-# esta en el cache. Se incluye igual para que esa funcion no falle con
-# un error de dependencia faltante en el servidor.
 streamlit==1.64.0
 pandas==3.0.5
 
-# Descarga de xG desde Understat (scraping). El "Actualizar datos" con
-# fuente "xG real" puede ser lento o fallar en la nube si Understat
-# limita el trafico desde IPs de datacenter -- ver notas de despliegue.
-# Si preferis un build mas liviano y no te importa perder esa funcion
-# en la nube (las predicciones siguen andando con el cache commiteado),
-# comenta o borra esta linea.
+# Descarga de xG desde Understat (scraping). Anclado a proposito:
+# red_understat.py se engancha a internos de soccerdata (_request_api,
+# _init_session) para reintentar los errores "TLS Client Error". Antes de
+# subir esta version, correr `python xg_loader.py --refrescar` y revisar
+# que no aparezca el aviso "Understat queda sin blindar" en los logs.
+#
+# Es OPCIONAL en tiempo de ejecucion: xg_loader.py solo lo importa dentro
+# de las funciones que descargan, asi que con el cache/ commiteado la app
+# predice sin el. Solo hace falta para "Actualizar datos" y para el
+# actualizador en segundo plano (actualizador.py).
 soccerdata==1.9.1
+
+# Cliente HTTP alternativo de red_understat.py cuando el cliente TLS de
+# soccerdata falla (ya lo trae streamlit; se declara porque se usa directo).
+requests>=2.32

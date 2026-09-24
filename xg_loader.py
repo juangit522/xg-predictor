@@ -17,10 +17,12 @@ import csv
 import difflib
 import json
 import os
+import threading
 from datetime import datetime
 
 from data_loader import LIGAS, CACHE_DIR, descargar_csv, leer_partidos, parsear_fecha
 from logging_setup import get_logger
+from red_understat import blindar
 from validacion import validar_lote
 
 logger = get_logger("xg_loader")
@@ -30,6 +32,12 @@ logger = get_logger("xg_loader")
 # en la llamada de resumen por equipo, igual que le pasa a bajar_jugadores.
 RED_REINTENTOS = 4
 RED_ESPERA_BASE = 5.0  # segundos: 5, 10, 20, 40...
+
+# Una sola descarga de Understat a la vez por proceso. En la web conviven
+# el hilo de actualizacion en segundo plano y las cargas que dispara un
+# usuario: sin esto ambos podrian scrapear lo mismo en paralelo (doble
+# trafico contra el rate limit) y pisarse el CSV del cache.
+_LOCK_DESCARGA = threading.Lock()
 
 # ALIAS puede extenderse sin tocar codigo: si existe este archivo junto al
 # script, sus entradas se mezclan con el diccionario hardcodeado de abajo
@@ -187,6 +195,28 @@ def diagnosticar_alias(ligas, temporadas):
 # DESCARGA DESDE UNDERSTAT
 # ----------------------------------------------------------------------
 
+def _importar_soccerdata():
+    """import soccerdata, con su log callado.
+
+    soccerdata configura el logger RAIZ al importarse y escupe decenas de
+    lineas por llamada. Subimos el nivel del raiz en vez de usar
+    logging.disable(): disable() apaga TODOS los loggers del proceso, y en
+    la app web (proceso de larga vida) eso silenciaba para siempre los
+    logs propios tras la primera descarga. Los loggers de logging_setup no
+    propagan al raiz, asi que no les afecta.
+    """
+    import logging
+    import warnings
+    warnings.filterwarnings("ignore")
+    try:
+        import soccerdata as sd
+    except ImportError:
+        raise SystemExit("  [error] falta soccerdata.\n"
+                         "  Instalalo con: python -m pip install soccerdata")
+    logging.getLogger().setLevel(logging.CRITICAL)
+    return sd
+
+
 def bajar_understat(ligas, temporadas):
     """Trae xG por partido. Devuelve {(liga, temporada): [filas]}.
 
@@ -196,25 +226,14 @@ def bajar_understat(ligas, temporadas):
     llamada tambien puede toparse con un rate-limit o timeout puntual
     de Understat.
     """
-    # soccerdata escupe decenas de lineas de log por llamada; las callamos
-    import logging
     import time
-    import warnings
-    warnings.filterwarnings("ignore")
-    logging.disable(logging.CRITICAL)
-
-    try:
-        import soccerdata as sd
-    except ImportError:
-        logging.disable(logging.NOTSET)
-        raise SystemExit("  [error] falta soccerdata.\n"
-                         "  Instalalo con: python -m pip install soccerdata")
+    sd = _importar_soccerdata()
 
     nombres_us = [LIGAS_UNDERSTAT[l] for l in ligas]
     print("  [understat] descargando {} | {}".format(
         ", ".join(ligas), ", ".join(temporadas)))
 
-    us = sd.Understat(leagues=nombres_us, seasons=list(temporadas))
+    us = blindar(sd.Understat(leagues=nombres_us, seasons=list(temporadas)))
 
     df = None
     ultimo_error = None
@@ -230,7 +249,6 @@ def bajar_understat(ligas, temporadas):
                                str(e)[:100], espera)
                 time.sleep(espera)
     if df is None:
-        logging.disable(logging.NOTSET)
         raise SystemExit("  [error] no se pudo leer Understat tras {} intentos\n  {}".format(
             RED_REINTENTOS, ultimo_error))
 
@@ -393,7 +411,11 @@ def ruta_cache(liga, temporadas):
 
 def guardar(partidos, ruta):
     os.makedirs(CACHE_DIR, exist_ok=True)
-    with open(ruta, "w", newline="", encoding="utf-8") as f:
+    # Se escribe a un temporal y se renombra: la app puede estar leyendo
+    # este CSV mientras el hilo de actualizacion lo regenera, y nunca
+    # debe ver un archivo a medio escribir.
+    tmp = ruta + ".tmp"
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CAMPOS)
         w.writeheader()
         for p in partidos:
@@ -402,6 +424,7 @@ def guardar(partidos, ruta):
             c = p.get("cuotas")
             fila["cuota_h"], fila["cuota_d"], fila["cuota_a"] = c if c else ("", "", "")
             w.writerow(fila)
+    os.replace(tmp, ruta)
     print("  [guardado] {} ({} partidos)".format(ruta, len(partidos)))
 
 
@@ -444,13 +467,19 @@ def cargar_xg(ligas, temporadas, refrescar=False):
     Lee del cache local salvo que pidas --refrescar. Solo llama a
     soccerdata cuando falta algun archivo.
     """
-    faltantes = [l for l in ligas
-                 if refrescar or not os.path.exists(ruta_cache(l, temporadas))]
+    def faltantes():
+        return [l for l in ligas
+                if refrescar or not os.path.exists(ruta_cache(l, temporadas))]
 
-    if faltantes:
-        filas_us = bajar_understat(faltantes, temporadas)
-        for liga in faltantes:
-            guardar(unir(filas_us, liga, temporadas), ruta_cache(liga, temporadas))
+    if faltantes():
+        with _LOCK_DESCARGA:
+            # Se recalcula dentro del lock: si otro hilo acaba de bajar
+            # esta misma liga mientras esperabamos, no se repite.
+            pendientes = faltantes()
+            if pendientes:
+                filas_us = bajar_understat(pendientes, temporadas)
+                for liga in pendientes:
+                    guardar(unir(filas_us, liga, temporadas), ruta_cache(liga, temporadas))
 
     todos = []
     for liga in ligas:
@@ -499,15 +528,11 @@ def bajar_jugadores(liga, temporadas, ruta, lote=10, pausa=6.0, reintentos=6):
     Ademas soccerdata cachea cada partido en ~/soccerdata/, asi que un
     reintento sobre algo ya bajado no vuelve a salir a la red.
     """
-    import logging
     import time
-    import warnings
-    warnings.filterwarnings("ignore")
-    logging.disable(logging.CRITICAL)
-    import soccerdata as sd
+    sd = _importar_soccerdata()
 
     os.makedirs(CACHE_DIR, exist_ok=True)
-    us = sd.Understat(leagues=[LIGAS_UNDERSTAT[liga]], seasons=list(temporadas))
+    us = blindar(sd.Understat(leagues=[LIGAS_UNDERSTAT[liga]], seasons=list(temporadas)))
     ids = sorted(set(us.read_schedule().reset_index().game_id.dropna().astype(int)))
 
     hechos = _ya_descargados(ruta)
@@ -542,6 +567,11 @@ def bajar_jugadores(liga, temporadas, ruta, lote=10, pausa=6.0, reintentos=6):
                       flush=True)
                 continue
 
+            # El blindaje de red salta (en vez de abortar el lote) los
+            # partidos que agotan reintentos: se cuentan para el aviso final
+            # y, al no quedar en el CSV, la proxima corrida los reintenta.
+            bajados = set(df.game_id.astype(int)) if "game_id" in df.columns else set()
+            fallidos += len(set(trozo) - bajados)
             for r in df.itertuples(index=False):
                 escritor.writerow({
                     "game_id": int(r.game_id),
