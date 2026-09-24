@@ -1,0 +1,6 @@
+# Los CSV del cache se guardan en el repo siempre con fin de linea LF.
+# Sin esto, el workflow de GitHub (Linux, escribe CRLF via el modulo csv)
+# y Windows (core.autocrlf) se pisaban: cada corrida diaria reescribia
+# todos los archivos aunque los datos fueran identicos, y eso disparaba
+# un redespliegue innecesario de la app.
+*.csv text eol=lf
