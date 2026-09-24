@@ -9,3 +9,19 @@ gatherUsageStats = false
 
 [client]
 toolbarMode = "viewer"
+
+# Tema oscuro. primaryColor es un verde-azulado elegido por contraste:
+# Streamlit escribe en BLANCO sobre el boton primario, y los tonos mas
+# brillantes (#00C9A7) dejan ese texto en 2.1:1, ilegible. #0D9488 da
+# 3.7:1 con el blanco y 5:1 sobre el fondo.
+[theme]
+base = "dark"
+primaryColor = "#0D9488"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1E232A"
+textColor = "#E6EDF3"
+font = "sans-serif"
+borderColor = "#2D333B"
+baseRadius = "0.6rem"
+# El grafico 1X2 usa el primer color: que coincida con el acento.
+chartCategoricalColors = ["#14B8A6", "#3B82F6", "#F59E0B", "#EC4899", "#A78BFA"]

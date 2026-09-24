@@ -45,11 +45,13 @@ Debajo del selector de liga vas a ver dos opciones:
 
 El control deslizante **"Temporadas a usar"** define cuántos años hacia atrás mira el modelo (1, 2 o 3 temporadas). Usar más temporadas le da más historial al modelo, pero también incluye partidos más viejos que pesan menos en el cálculo. Dejarlo en 3 (el valor por defecto) funciona bien en la mayoría de los casos.
 
+La temporada que se está jugando **siempre se incluye** (aparece marcada como "en curso" debajo del control), a partir de septiembre. Sus partidos son los más recientes, así que son los que más pesan. Los datos se actualizan solos varias veces al día. Con **1 temporada** a principio de campaña hay pocos partidos por equipo, así que las predicciones son menos estables: conviene usar 2 o 3.
+
 ---
 
 ## 3. Cómo interpretar una predicción
 
-1. Andá a la pestaña **"🎯 Predicciones"** (arriba de todo).
+1. Andá a la pestaña **"🎯 Predicciones del Día"** (arriba de todo).
 2. Elegí el **equipo local** y el **equipo visitante** en los dos menúes desplegables.
 3. Hacé clic en el botón rojo **"🔮 Predecir partido"**.
 
@@ -126,4 +128,4 @@ Podés abrir la misma aplicación desde el celular mientras la computadora esté
 
 ## ¿Dónde encuentro esto de nuevo?
 
-Este mismo manual está disponible sin salir de la aplicación: buscá la pestaña **"📖 Manual"** arriba de todo, al lado de "Predicciones" y "Diagnóstico".
+Este mismo manual está disponible sin salir de la aplicación: buscá la pestaña **"📖 Manual"** arriba de todo, al lado de "Predicciones del Día", "Tabla de Posiciones / Datos" y "Estadísticas del Modelo".

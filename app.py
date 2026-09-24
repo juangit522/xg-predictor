@@ -57,6 +57,35 @@ def cargar_elo(liga_key, temporadas, fuente, firma):
     return elo_desde_partidos(partidos)
 
 
+@st.cache_data(show_spinner=False)
+def tabla_posiciones(liga_key, temporada, firma):
+    """Clasificacion real (3/1/0) de una temporada, desde football-data.
+
+    Siempre desde el CSV y no desde Understat: football-data trae todos
+    los resultados, mientras que el cruce con xG descarta los partidos
+    que no logra emparejar. No usa el modelo: son resultados.
+    """
+    from fuentes import obtener_fuente
+    tabla = {}
+    for p in obtener_fuente("csv").partidos(liga_key, [temporada]):
+        for yo, rival, gf, gc in ((p["local"], p["visita"], p["goles_local"], p["goles_visita"]),
+                                  (p["visita"], p["local"], p["goles_visita"], p["goles_local"])):
+            f = tabla.setdefault(yo, {"Equipo": yo, "PJ": 0, "G": 0, "E": 0, "P": 0,
+                                      "GF": 0, "GC": 0})
+            f["PJ"] += 1
+            f["GF"] += gf
+            f["GC"] += gc
+            f["G" if gf > gc else "E" if gf == gc else "P"] += 1
+    df = pd.DataFrame(list(tabla.values()))
+    if df.empty:
+        return df
+    df["DG"] = df["GF"] - df["GC"]
+    df["Pts"] = 3 * df["G"] + df["E"]
+    df = df.sort_values(["Pts", "DG", "GF"], ascending=False).reset_index(drop=True)
+    df.index = df.index + 1
+    return df
+
+
 def estado_calibracion():
     """(estado, dias, metadata) para el bloque 'principal' de modelo_config.json.
     estado: 'sin_calibrar' | 'ok' | 'vencida'.
@@ -103,24 +132,16 @@ with st.sidebar:
              "partido este en el cache de Understat o poder descargarlo.")
     n_temporadas = st.select_slider("Temporadas a usar", options=[1, 2, 3], value=3)
     temporadas = tuple(temporadas_recientes(n_temporadas))
-    st.caption("Temporadas: " + ", ".join(temporadas))
+    st.caption("Temporadas: " + ", ".join(
+        t + (" (en curso)" if actualizador.en_curso((t,)) else "") for t in temporadas))
 
-    st.divider()
-    st.subheader("Estado del modelo")
+    # Indicador compacto; el detalle vive en la pestana "Estadisticas del Modelo".
     estado, dias, meta = estado_calibracion()
-    if estado == "sin_calibrar":
-        st.warning("Sin calibracion guardada.\nUsando los defaults del codigo.")
-        st.caption("Corre `python backtest.py --guardar-config` para calibrar.")
-    elif estado == "ok":
-        st.success(f"Calibrado hace {dias} dia(s)")
-        st.caption(f"limite antes de avisar: {config_modelo.ANTIGUEDAD_MAX_DIAS} dias")
-        if meta:
-            st.caption(f"RPS {meta.get('rps')} · {meta.get('n_partidos')} partidos · "
-                      f"{', '.join(meta.get('ligas', []))}")
-    else:
-        st.error(f"Calibracion vencida: hace {dias} dias "
-                f"(limite {config_modelo.ANTIGUEDAD_MAX_DIAS})")
-        st.caption("Conviene relanzar backtest.py --guardar-config")
+    st.caption({
+        "sin_calibrar": "\U0001f7e1 Modelo sin calibrar (defaults)",
+        "ok": f"\U0001f7e2 Modelo calibrado hace {dias} dia(s)",
+        "vencida": f"\U0001f534 Calibracion vencida (hace {dias} dias)",
+    }[estado])
 
     st.divider()
     act = obtener_actualizador()
@@ -194,8 +215,9 @@ if len(equipos) < 2:
 
 parametros = parametros_prediccion(liga_key, fuente)
 
-tab_prediccion, tab_diagnostico, tab_manual = st.tabs(
-    ["\U0001f3af Predicciones", "\U0001f4ca Diagnostico", "\U0001f4d6 Manual"])
+tab_prediccion, tab_datos, tab_modelo, tab_manual = st.tabs([
+    "\U0001f3af Predicciones del Día", "\U0001f3c6 Tabla de Posiciones / Datos",
+    "\U0001f4ca Estadísticas del Modelo", "\U0001f4d6 Manual"])
 
 
 # ----------------------------------------------------------------------
@@ -236,6 +258,13 @@ with tab_prediccion:
 
     predecir_click = st.button("\U0001f52e Predecir partido", type="primary", width='stretch')
 
+    # La prediccion guardada solo vale para los datos con que se calculo:
+    # tras cambiar de liga/fuente/temporadas (o actualizarse los datos) sus
+    # equipos pueden no existir en `equipos` (KeyError) o sus numeros
+    # estar desactualizados.
+    if st.session_state.get("ultimo_contexto") != (tarea, firma):
+        st.session_state.pop("ultimo_resultado", None)
+
     if predecir_click or "ultimo_resultado" in st.session_state:
         if predecir_click:
             local = equipos[equipo_local]
@@ -243,6 +272,7 @@ with tab_prediccion:
             resultado = predecir(local, visita, liga, k=parametros["k"], rho=parametros["rho"])
             st.session_state["ultimo_resultado"] = resultado
             st.session_state["ultimo_par"] = (equipo_local, equipo_visita)
+            st.session_state["ultimo_contexto"] = (tarea, firma)
         else:
             resultado = st.session_state["ultimo_resultado"]
             equipo_local, equipo_visita = st.session_state["ultimo_par"]
@@ -334,11 +364,26 @@ with tab_prediccion:
 
 
 # ----------------------------------------------------------------------
-# TAB 2: DIAGNOSTICO
+# TAB 2: TABLA DE POSICIONES / DATOS
 # ----------------------------------------------------------------------
-with tab_diagnostico:
-    st.subheader("Estado de calibracion completo")
-    st.code(config_modelo.resumen(), language=None)
+with tab_datos:
+    temporada_tabla = max(temporadas)
+    st.subheader(f"Tabla de posiciones — {NOMBRES_LIGA[liga_key]} {temporada_tabla}"
+                 + (" (en curso)" if actualizador.en_curso((temporada_tabla,)) else ""))
+    firma_tabla = actualizador.firma(liga_key, (temporada_tabla,), "csv")
+    if None in firma_tabla:
+        # Sin el CSV en disco, calcularla implicaria descargar en el hilo
+        # de la pagina; se encola y aparece al terminar.
+        act.solicitar((liga_key, (temporada_tabla,), "csv"), forzar=False)
+        st.info("Descargando los resultados de la temporada en segundo plano...")
+    else:
+        df_tabla = tabla_posiciones(liga_key, temporada_tabla, firma_tabla)
+        st.dataframe(df_tabla, width='stretch', height=min(38 + 35 * len(df_tabla), 740),
+                     column_config={"Pts": st.column_config.NumberColumn("Pts", help="Puntos")})
+        st.caption("Resultados reales de football-data (3 pts victoria, 1 empate). "
+                   "Desempate por diferencia de gol y goles a favor; algunas ligas "
+                   "usan el enfrentamiento directo, asi que puede haber diferencias "
+                   "puntuales con la tabla oficial.")
 
     st.divider()
     st.subheader(f"Ranking Elo — {NOMBRES_LIGA[liga_key]}")
@@ -352,6 +397,58 @@ with tab_diagnostico:
         st.dataframe(df_elo, width='stretch')
     except SystemExit as e:
         st.error(f"No se pudo calcular Elo: {e}")
+
+    st.caption(f"{n_partidos} partidos cargados ({', '.join(temporadas)}) · "
+               f"media de goles por partido — local: {liga.media_goles_local:.2f} · "
+               f"visita: {liga.media_goles_visita:.2f}")
+
+
+# ----------------------------------------------------------------------
+# TAB 3: ESTADISTICAS DEL MODELO
+# ----------------------------------------------------------------------
+with tab_modelo:
+    st.subheader("Calibracion")
+    if estado == "sin_calibrar":
+        st.warning("Sin calibracion guardada. Usando los defaults del codigo.")
+        st.caption("Corre `python backtest.py --guardar-config` para calibrar.")
+    elif estado == "ok":
+        st.success(f"Calibrado hace {dias} dia(s) · limite antes de avisar: "
+                   f"{config_modelo.ANTIGUEDAD_MAX_DIAS} dias")
+    else:
+        st.error(f"Calibracion vencida: hace {dias} dias "
+                 f"(limite {config_modelo.ANTIGUEDAD_MAX_DIAS}). "
+                 f"Conviene relanzar `backtest.py --guardar-config`.")
+
+    if meta:
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            with st.container(border=True):
+                st.metric("RPS del backtest", meta.get("rps"),
+                          help="Ranked Probability Score: error de las probabilidades "
+                               "1X2. Mas bajo = mejor.")
+        with m2:
+            with st.container(border=True):
+                st.metric("Partidos de calibracion", meta.get("n_partidos"))
+        with m3:
+            with st.container(border=True):
+                st.metric("Ligas", len(meta.get("ligas", [])))
+        st.caption(f"Ligas: {', '.join(meta.get('ligas', []))} · "
+                   f"temporadas: {', '.join(meta.get('temporadas', []))}")
+
+    st.markdown("##### Parametros usados en esta prediccion")
+    p1, p2, p3, p4 = st.columns(4)
+    for col, clave, ayuda in (
+        (p1, "xi", "Decaimiento temporal por dia: cuanto pesan menos los partidos viejos."),
+        (p2, "k", "Encogimiento hacia la media de la liga (mas alto = mas prudente)."),
+        (p3, "w", "Mezcla de senal: 1 = solo goles, 0 = solo xG."),
+        (p4, "rho", "Correccion Dixon-Coles de marcadores bajos / empates."),
+    ):
+        with col:
+            with st.container(border=True):
+                st.metric(clave, parametros[clave], help=ayuda)
+
+    with st.expander("Estado de calibracion completo"):
+        st.code(config_modelo.resumen(), language=None)
 
     st.divider()
     st.subheader("Tabla de fuerzas de la liga cargada")
@@ -370,13 +467,12 @@ with tab_diagnostico:
             "Defensa fuera": round(fuerza_defensa_visita(e, liga, parametros["k"]), 3),
         })
     st.dataframe(pd.DataFrame(filas), hide_index=True, width='stretch')
-
-    st.caption(f"Media de goles por partido — local: {liga.media_goles_local:.2f} · "
-              f"visita: {liga.media_goles_visita:.2f}")
+    st.caption("1.00 = promedio de la liga. Ataque: mas alto = mejor. "
+               "Defensa: mas bajo = mejor (encaja menos).")
 
 
 # ----------------------------------------------------------------------
-# TAB 3: MANUAL DE USO
+# TAB 4: MANUAL DE USO
 # ----------------------------------------------------------------------
 with tab_manual:
     ruta_manual = os.path.join(os.path.dirname(os.path.abspath(__file__)), "MANUAL.md")
