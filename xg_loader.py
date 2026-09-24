@@ -294,12 +294,17 @@ def bajar_understat(ligas, temporadas):
 # UNION CON football-data.co.uk (para conservar cuotas y tiros)
 # ----------------------------------------------------------------------
 
-def indexar_football_data(liga, temporadas):
-    """{(fecha_dia, equipo_local): partido} desde los CSV de football-data."""
+def indexar_football_data(liga, temporadas, refrescar_ultima=False):
+    """{(fecha_dia, equipo_local): partido} desde los CSV de football-data.
+
+    refrescar_ultima re-descarga el CSV de la temporada mas reciente (la
+    que puede estar en curso; las anteriores ya no cambian).
+    """
     codigo, _ = LIGAS[liga]
+    ultima = max(temporadas)
     indice, nombres = {}, set()
     for temp in temporadas:
-        ruta = descargar_csv(codigo, temp)
+        ruta = descargar_csv(codigo, temp, forzar=refrescar_ultima and temp == ultima)
         for p in leer_partidos(ruta):
             indice[(p["fecha"].date(), p["local"])] = p
             nombres.add(p["local"])
@@ -334,15 +339,20 @@ def _cargar_cuotas(ruta, indice):
             indice[clave].setdefault("cuotas", None)
 
 
-def unir(filas_us, liga, temporadas):
+def unir(filas_us, liga, temporadas, refrescar_csv=False):
     """Une Understat con football-data por (fecha, equipo local).
 
     Understat y football-data a veces difieren un dia en la fecha
     (husos horarios, partidos de medianoche), asi que probamos -1/+1.
+
+    refrescar_csv: con la temporada en curso, un xG recien bajado contra
+    un CSV de football-data de hace dias dejaria los partidos nuevos "sin
+    pareja" y se descartarian. Al refrescar xG se refresca tambien el CSV.
     """
     from datetime import timedelta
 
-    indice, nombres_fd = indexar_football_data(liga, temporadas)
+    indice, nombres_fd = indexar_football_data(liga, temporadas,
+                                               refrescar_ultima=refrescar_csv)
     unidos, huerfanos = [], []
 
     for f in filas_us:
@@ -479,7 +489,8 @@ def cargar_xg(ligas, temporadas, refrescar=False):
             if pendientes:
                 filas_us = bajar_understat(pendientes, temporadas)
                 for liga in pendientes:
-                    guardar(unir(filas_us, liga, temporadas), ruta_cache(liga, temporadas))
+                    guardar(unir(filas_us, liga, temporadas, refrescar_csv=refrescar),
+                            ruta_cache(liga, temporadas))
 
     todos = []
     for liga in ligas:

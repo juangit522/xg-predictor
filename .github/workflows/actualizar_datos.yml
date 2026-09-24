@@ -1,4 +1,4 @@
-# Refresca el cache/ commiteado una vez por semana (y a mano desde la
+# Refresca el cache/ commiteado una vez por dia (y a mano desde la
 # pestana Actions). Streamlit Community Cloud redespliega solo al ver el
 # push, asi que la app arranca siempre con datos recientes aunque el hilo
 # de actualizacion de la app haya estado dormido (la nube duerme las apps
@@ -7,7 +7,9 @@ name: Actualizar datos
 
 on:
   schedule:
-    - cron: "0 6 * * 1"   # lunes 06:00 UTC
+    # 06:00 UTC: despues de la jornada europea de la noche anterior.
+    # Diario porque la temporada en curso cambia cada jornada.
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:

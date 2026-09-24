@@ -156,7 +156,7 @@ hechas = []
 
 
 def ejecutar_falso(tarea, forzar=True):
-    time.sleep(0.2)
+    time.sleep(1.0)  # bastante mas que el umbral de "no bloquea"
     if tarea[0] == "rota":
         raise SystemExit("equipo sin mapear")
     hechas.append((tarea, forzar))
@@ -171,10 +171,10 @@ inicio = time.time()
 act.solicitar(t_ok)
 act.solicitar(t_ok)       # duplicada: se ignora
 act.solicitar(t_rota)
-check("solicitar() no bloquea", time.time() - inicio < 0.1)
+check("solicitar() no bloquea", time.time() - inicio < 0.5)
 check("el estado refleja trabajo pendiente", act.estado()["ocupado"])
 
-limite = time.time() + 5
+limite = time.time() + 10
 while act.estado()["ocupado"] and time.time() < limite:
     time.sleep(0.05)
 
@@ -185,7 +185,7 @@ check("registra el error de la tarea rota", t_rota in est["errores"])
 check("ultima_ok apunta a la tarea buena", est["ultima_ok"] and est["ultima_ok"][0] == t_ok)
 
 act.solicitar(t_ok, forzar=False)
-limite = time.time() + 5
+limite = time.time() + 10
 while act.estado()["ocupado"] and time.time() < limite:
     time.sleep(0.05)
 check("el hilo sigue vivo tras un SystemExit", hechas[-1] == (t_ok, False))
@@ -200,6 +200,20 @@ with tempfile.TemporaryDirectory() as d:
     f1 = actualizador.firma(*t)
     os.utime(ruta, (1, 1))
     check("firma cambia al regenerarse el archivo", f1 != actualizador.firma(*t))
+
+from datetime import datetime as dt
+check("septiembre ya incluye la temporada en curso",
+      actualizador.temporadas_recientes(3, dt(2026, 9, 24)) == ["2425", "2526", "2627"])
+check("agosto todavia usa la temporada recien terminada",
+      actualizador.temporadas_recientes(3, dt(2026, 8, 20)) == ["2324", "2425", "2526"])
+check("enero sigue en la temporada que empezo en septiembre",
+      actualizador.temporadas_recientes(1, dt(2027, 1, 15)) == ["2627"])
+check("en_curso: combinacion con la temporada actual",
+      actualizador.en_curso(("2526", "2627"), dt(2026, 9, 24)))
+check("en_curso: temporadas viejas no",
+      not actualizador.en_curso(("2425", "2526"), dt(2026, 9, 24)))
+check("en_curso: en julio nada esta en curso",
+      not actualizador.en_curso(("2627",), dt(2027, 7, 1)))
 
 check("tareas_app cubre 4 ligas csv + 12 combinaciones xG",
       len(actualizador.tareas_app()) == 16, str(len(actualizador.tareas_app())))

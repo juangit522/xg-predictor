@@ -19,8 +19,10 @@ Uso por linea de comandos (cron, GitHub Actions):
 
 Variables de entorno:
     XG_ACTUALIZACION_AUTO=0   desactiva el barrido periodico (la cola manual sigue)
-    XG_INTERVALO_HORAS=12     cada cuanto se revisa el cache
-    XG_EDAD_MAX_HORAS=168     antiguedad a partir de la cual se re-descarga
+    XG_INTERVALO_HORAS=6      cada cuanto se revisa el cache
+    XG_EDAD_MAX_EN_CURSO_HORAS=12
+                              antiguedad maxima de datos con la temporada en curso
+    XG_EDAD_MAX_HORAS=168     antiguedad maxima de temporadas ya terminadas
 """
 
 import argparse
@@ -37,25 +39,43 @@ logger = get_logger("actualizador")
 
 FUENTES_APP = ("csv", "understat")  # csv primero: la union con xG lo necesita
 MAX_TEMPORADAS = 3                   # el slider de la app va de 1 a 3
-INTERVALO_S = float(os.environ.get("XG_INTERVALO_HORAS", "12")) * 3600
+INTERVALO_S = float(os.environ.get("XG_INTERVALO_HORAS", "6")) * 3600
 EDAD_MAX_S = float(os.environ.get("XG_EDAD_MAX_HORAS", "168")) * 3600
+EDAD_MAX_EN_CURSO_S = float(os.environ.get("XG_EDAD_MAX_EN_CURSO_HORAS", "12")) * 3600
 AUTOMATICO = os.environ.get("XG_ACTUALIZACION_AUTO", "1") != "0"
 # Primer barrido un rato despues del arranque, para no competir por CPU
 # con el primer render de la app recien desplegada.
 ESPERA_INICIAL_S = 60
 
 
-def temporadas_recientes(n=3):
-    """Las n ultimas temporadas completas, formato '2526'.
+def temporadas_recientes(n=3, hoy=None):
+    """Las n ultimas temporadas, INCLUIDA la que esta en curso, formato '2526'.
 
-    Espejo de backtest.temporadas_por_defecto(): se reimplementa aqui
-    (en vez de importarla) para no arrastrar la dependencia de
-    concurrent.futures de backtest.py solo por esta funcion pura.
+    Para predecir el proximo partido importa la forma actual: los
+    partidos de la temporada en curso son los mas recientes y el
+    decaimiento temporal (xi) ya les da mas peso.
+
+    La temporada nueva cuenta desde SEPTIEMBRE, no desde agosto: las
+    ligas arrancan a mitad de agosto y football-data/Understat tardan en
+    publicar los primeros partidos, asi que en agosto la "ultima" sigue
+    siendo la que acaba de terminar (evita una temporada vacia o un 404).
+
+    Distinto a backtest.temporadas_por_defecto(), que usa solo temporadas
+    COMPLETAS: un backtest necesita resultados ya conocidos.
     """
-    hoy = datetime.now()
-    ultimo = hoy.year - 1 if hoy.month >= 8 else hoy.year - 2
+    hoy = hoy or datetime.now()
+    ultimo = hoy.year if hoy.month >= 9 else hoy.year - 1
     return ["{:02d}{:02d}".format((ultimo - i) % 100, (ultimo - i + 1) % 100)
             for i in range(n - 1, -1, -1)]
+
+
+def en_curso(temporadas, hoy=None):
+    """True si la combinacion incluye la temporada que se esta jugando
+    (sus archivos cambian cada jornada y hay que refrescarlos seguido)."""
+    hoy = hoy or datetime.now()
+    if 6 <= hoy.month <= 8:
+        return False  # junio-agosto: la ultima temporada ya termino
+    return temporadas_recientes(1, hoy)[0] in temporadas
 
 
 def etiqueta(tarea):
@@ -110,16 +130,18 @@ def ejecutar(tarea, forzar=True):
     obtener_fuente(fuente).partidos(liga, list(temporadas), forzar=forzar)
 
 
-def vencidas(edad_max_s=EDAD_MAX_S):
+def vencidas(edad_max_s=EDAD_MAX_S, edad_max_en_curso_s=EDAD_MAX_EN_CURSO_S):
     """[(tarea, forzar)] con archivos faltantes (forzar=False: solo construir
-    lo que falta) o mas viejos que edad_max_s (forzar=True)."""
+    lo que falta) o demasiado viejos (forzar=True). Las combinaciones con
+    la temporada en curso vencen mucho antes: cambian cada jornada."""
     ahora = time.time()
     salida = []
     for tarea in tareas_app():
         marcas = firma(*tarea)
+        limite = edad_max_en_curso_s if en_curso(tarea[1]) else edad_max_s
         if None in marcas:
             salida.append((tarea, False))
-        elif ahora - min(marcas) > edad_max_s:
+        elif ahora - min(marcas) > limite:
             salida.append((tarea, True))
     return salida
 
@@ -127,11 +149,9 @@ def vencidas(edad_max_s=EDAD_MAX_S):
 class Actualizador:
     """Cola + un hilo trabajador. Seguro para llamar desde cualquier sesion."""
 
-    def __init__(self, automatico=AUTOMATICO, intervalo_s=INTERVALO_S,
-                 edad_max_s=EDAD_MAX_S):
+    def __init__(self, automatico=AUTOMATICO, intervalo_s=INTERVALO_S):
         self._automatico = automatico
         self._intervalo_s = intervalo_s
-        self._edad_max_s = edad_max_s
         self._cv = threading.Condition()
         self._cola = []
         self._actual = None
@@ -179,7 +199,7 @@ class Actualizador:
                 while not self._cola:
                     if self._automatico and time.time() >= proximo_barrido:
                         proximo_barrido = time.time() + self._intervalo_s
-                        for tarea, forzar in vencidas(self._edad_max_s):
+                        for tarea, forzar in vencidas():
                             if tarea != self._actual and all(t != tarea for t, _ in self._cola):
                                 self._cola.append((tarea, forzar))
                         if self._cola:

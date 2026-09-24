@@ -6,8 +6,8 @@ Hay dos mecanismos, que se complementan:
 
 | Mecanismo | Dónde corre | Qué hace |
 |---|---|---|
-| `actualizador.py` (hilo en segundo plano) | Dentro de la app | Arranca con la primera visita. Cada 12 h descarga lo que falte o tenga más de 7 días. También atiende el botón **Actualizar datos**. La web nunca espera a la red. |
-| `.github/workflows/actualizar_datos.yml` | GitHub Actions | Cada lunes (o a mano desde la pestaña *Actions*) vuelve a descargar todo, commitea `cache/` si cambió, y eso redespliega la app. |
+| `actualizador.py` (hilo en segundo plano) | Dentro de la app | Arranca con la primera visita. Cada 6 h revisa el cache: los datos de la temporada en curso se vuelven a descargar si tienen más de 12 h, los de temporadas terminadas si tienen más de 7 días. También atiende el botón **Actualizar datos**. La web nunca espera a la red. |
+| `.github/workflows/actualizar_datos.yml` | GitHub Actions | Cada día a las 06:00 UTC (o a mano desde la pestaña *Actions*) vuelve a descargar todo, commitea `cache/` si cambió, y eso redespliega la app. |
 
 Hacen falta los dos porque Streamlit Community Cloud **duerme las apps sin
 visitas** y **borra los archivos escritos en ejecución al reiniciar**. El
@@ -15,11 +15,12 @@ hilo mantiene frescos los datos mientras la app está despierta; el workflow
 garantiza que cada arranque parte de un `cache/` reciente.
 
 Variables de entorno opcionales (en Streamlit Cloud: *Settings → Secrets*,
-como `XG_INTERVALO_HORAS = "6"`):
+como `XG_INTERVALO_HORAS = "3"`):
 
 - `XG_ACTUALIZACION_AUTO=0`: desactiva el barrido periódico. El botón sigue funcionando.
-- `XG_INTERVALO_HORAS` (12): cada cuánto se revisa el cache.
-- `XG_EDAD_MAX_HORAS` (168): antigüedad a partir de la cual se vuelve a descargar.
+- `XG_INTERVALO_HORAS` (6): cada cuánto se revisa el cache.
+- `XG_EDAD_MAX_EN_CURSO_HORAS` (12): antigüedad máxima de los datos que incluyen la temporada en curso.
+- `XG_EDAD_MAX_HORAS` (168): antigüedad máxima de las temporadas ya terminadas.
 
 ## Streamlit Community Cloud
 
@@ -44,6 +45,23 @@ docker run -p 8501:8501 -v xg-cache:/app/cache xg-predictor
 
 El volumen `xg-cache` conserva lo descargado entre reinicios. El contenedor
 respeta la variable `PORT` que inyectan la mayoría de estas plataformas.
+
+## Temporada en curso y equipos ascendidos
+
+La app usa las últimas 1–3 temporadas **incluida la que está en curso**
+(desde septiembre; en agosto sigue usando las ya terminadas porque las
+fuentes todavía no publicaron partidos). Los scripts de calibración
+(`backtest.py`) siguen usando solo temporadas completas.
+
+Cada temporada nueva trae equipos ascendidos que Understat y
+football-data nombran distinto. Antes de septiembre corré:
+
+```bash
+python xg_loader.py --todas --temporadas 2728 --diagnostico
+```
+
+y agregá a `alias_equipos.json` los que falten. Si no, la descarga de xG
+de esa liga falla y la app muestra el error con el nombre sugerido.
 
 ## Actualizar a mano
 
