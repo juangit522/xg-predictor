@@ -255,6 +255,12 @@ with tab_prediccion:
         cuota_local = oc1.number_input("Cuota 1 (local)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
         cuota_empate = oc2.number_input("Cuota X (empate)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
         cuota_visita = oc3.number_input("Cuota 2 (visita)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        oc4, oc5, oc6, oc7 = st.columns(4)
+        cuota_over = oc4.number_input("Cuota +2.5 goles", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        cuota_under = oc5.number_input("Cuota -2.5 goles", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        cuota_btts_si = oc6.number_input("Cuota ambos marcan: Si", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        cuota_btts_no = oc7.number_input("Cuota ambos marcan: No", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        st.caption("Deja en 0.00 los mercados que no quieras evaluar.")
 
     predecir_click = st.button("\U0001f52e Predecir partido", type="primary", width='stretch')
 
@@ -316,26 +322,53 @@ with tab_prediccion:
             with st.container(border=True):
                 st.metric("Ambos marcan", f"{mk['btts_si']:.1%}")
 
+        # (mercado, seleccion, probabilidad del modelo, cuota cargada)
         cuotas_dadas = [
-            ("local", equipo_local, cuota_local), ("empate", "Empate", cuota_empate),
-            ("visita", equipo_visita, cuota_visita),
+            ("1X2", f"1 · {equipo_local}", mk["local"], cuota_local),
+            ("1X2", "X · Empate", mk["empate"], cuota_empate),
+            ("1X2", f"2 · {equipo_visita}", mk["visita"], cuota_visita),
+            ("Goles 2.5", "Mas de 2.5", mk["over_2_5"], cuota_over),
+            ("Goles 2.5", "Menos de 2.5", mk["under_2_5"], cuota_under),
+            ("Ambos marcan", "Si", mk["btts_si"], cuota_btts_si),
+            ("Ambos marcan", "No", 1 - mk["btts_si"], cuota_btts_no),
         ]
-        if any(c > 0 for _, _, c in cuotas_dadas):
-            st.markdown("##### Alerta de valor")
-            for clave, etiqueta, cuota in cuotas_dadas:
-                if cuota <= 0:
-                    continue
-                prob = mk[clave]
-                edge = prob * cuota - 1
-                if edge > UMBRAL_VALUE_BET:
-                    st.success(f"**{etiqueta}**: ventaja de **{edge:+.1%}** "
-                              f"(modelo {prob:.1%} vs implicita {1/cuota:.1%} de la cuota {cuota:.2f}) — posible value bet")
-                elif edge < -UMBRAL_VALUE_BET:
-                    st.warning(f"**{etiqueta}**: cuota {cuota:.2f} por debajo del valor del modelo "
-                              f"({edge:+.1%})")
-                else:
-                    st.info(f"**{etiqueta}**: cuota {cuota:.2f} alineada con el modelo ({edge:+.1%})")
-            st.caption("edge = probabilidad_modelo × cuota − 1. Positivo = el modelo cree que "
+        filas_valor = []
+        for mercado, seleccion, prob, cuota in cuotas_dadas:
+            if cuota <= 0:
+                continue
+            edge = prob * cuota - 1
+            if edge > UMBRAL_VALUE_BET:
+                senal = "✅ Value bet"
+            elif edge < -UMBRAL_VALUE_BET:
+                senal = "❌ Sin valor"
+            else:
+                senal = "➖ Alineada"
+            filas_valor.append({
+                "Mercado": mercado, "Seleccion": seleccion,
+                "Prob. modelo": prob * 100, "Cuota": cuota,
+                "Prob. implicita": 100 / cuota, "Edge": edge * 100,
+                "Señal": senal,
+            })
+        if filas_valor:
+            st.markdown("##### Deteccion de valor")
+            df_valor = pd.DataFrame(filas_valor)
+
+            def _color_edge(v):
+                if v > 0:
+                    return "color: #1a9e4b; font-weight: bold"
+                if v < 0:
+                    return "color: #d0342c; font-weight: bold"
+                return ""
+
+            st.dataframe(
+                df_valor.style
+                .map(_color_edge, subset=["Edge"])
+                .format({"Prob. modelo": "{:.1f}%", "Cuota": "{:.2f}",
+                         "Prob. implicita": "{:.1f}%", "Edge": "{:+.1f}%"}),
+                hide_index=True, width='stretch',
+            )
+            st.caption(f"Value bet = edge mayor a {UMBRAL_VALUE_BET:.0%}. "
+                      "edge = probabilidad_modelo × cuota − 1. Positivo = el modelo cree que "
                       "la cuota paga mas de lo que deberia. Esto es analisis informativo, "
                       "no una recomendacion de apuesta.")
 

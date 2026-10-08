@@ -79,13 +79,15 @@ También vas a ver dos datos extra:
 Si tenés a mano las cuotas que te ofrece tu casa de apuestas para ese partido, podés cargarlas para ver si el modelo detecta una ventaja:
 
 1. Antes de predecir, abrí el desplegable **"Cuotas de la casa de apuestas (opcional, para detectar valor)"**.
-2. Cargá la cuota decimal que viste en tu casa de apuestas para Local (1), Empate (X) y Visitante (2). Podés cargar solo una, dos o las tres — no hace falta completar todas.
+2. Cargá la cuota decimal que viste en tu casa de apuestas para cada mercado que quieras evaluar: Local (1), Empate (X), Visitante (2), Más/Menos de 2.5 goles y Ambos marcan (Sí/No). No hace falta completar todas: las que dejes en 0.00 no se muestran.
 3. Hacé clic en **"Predecir partido"**.
-4. Debajo de los resultados va a aparecer la sección **"Alerta de valor"**, con un mensaje de color para cada cuota que cargaste:
+4. Debajo de los resultados va a aparecer la tabla **"Detección de valor"**, con una fila por cada cuota que cargaste:
 
-   - 🟢 **Verde ("posible value bet")**: el modelo calcula que esa cuota paga *más* de lo que debería según su propia probabilidad. Es una señal de que esa apuesta podría tener valor a favor.
-   - 🟡 **Amarillo/naranja**: la cuota está *por debajo* de lo que el modelo considera justo — el modelo cree que esa apuesta no conviene tanto como parece.
-   - 🔵 **Azul (neutral)**: la cuota está alineada con lo que calcula el modelo, sin ventaja clara para ningún lado.
+   - **Prob. modelo**: la probabilidad que calcula el modelo para ese resultado.
+   - **Cuota**: la cuota que cargaste.
+   - **Prob. implícita**: la probabilidad que "cree" la casa de apuestas (1 ÷ cuota).
+   - **Edge**: la ventaja del modelo sobre la cuota (probabilidad del modelo × cuota − 1). En 🟢 **verde** si es positiva (la cuota paga *más* de lo que debería) y en 🔴 **rojo** si es negativa.
+   - **Señal**: ✅ *Value bet* si el edge supera el 2%, ❌ *Sin valor* si está por debajo de −2%, y ➖ *Alineada* si está en el medio.
 
 **Importante:** esto es un cálculo informativo basado en un modelo estadístico, **no es una garantía ni una recomendación de apuesta**. El modelo puede equivocarse, y ninguna predicción reemplaza tu propio criterio. Usalo como una herramienta más de análisis, no como la última palabra.
 
