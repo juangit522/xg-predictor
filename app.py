@@ -31,6 +31,8 @@ st.set_page_config(page_title="xG Predictor", page_icon="⚽", layout="wide")
 
 NOMBRES_LIGA = {k: v[1] for k, v in LIGAS.items()}
 UMBRAL_VALUE_BET = 0.02  # 2% de ventaja minima para marcar "value bet"
+CLAVES_CUOTAS = ("cuota_local", "cuota_empate", "cuota_visita", "cuota_over",
+                 "cuota_under", "cuota_btts_si", "cuota_btts_no")
 
 
 @st.cache_resource
@@ -248,18 +250,27 @@ with tab_prediccion:
             st.session_state.pop("sel_visita", None)
         equipo_visita = st.selectbox("✈️ Equipo visitante", opciones_visita, key="sel_visita")
 
+    # Las cuotas son de un partido puntual: al cambiar el local o el
+    # visitante se vuelven a 0.00 para no arrastrar las del partido anterior.
+    # Se hace antes de dibujar los number_input (despues Streamlit no deja
+    # tocar su valor via session_state en esta corrida).
+    if st.session_state.get("par_cuotas") != (equipo_local, equipo_visita):
+        st.session_state["par_cuotas"] = (equipo_local, equipo_visita)
+        for clave in CLAVES_CUOTAS:
+            st.session_state[clave] = 0.0
+
     with st.expander("Cuotas de la casa de apuestas (opcional, para detectar valor)"):
         st.caption("Si cargas las cuotas decimales que ofrece tu casa de apuestas, "
                   "se compara contra la probabilidad del modelo y se marca si hay ventaja.")
         oc1, oc2, oc3 = st.columns(3)
-        cuota_local = oc1.number_input("Cuota 1 (local)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-        cuota_empate = oc2.number_input("Cuota X (empate)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-        cuota_visita = oc3.number_input("Cuota 2 (visita)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        cuota_local = oc1.number_input("Cuota 1 (local)", min_value=0.0, step=0.01, format="%.2f", key="cuota_local")
+        cuota_empate = oc2.number_input("Cuota X (empate)", min_value=0.0, step=0.01, format="%.2f", key="cuota_empate")
+        cuota_visita = oc3.number_input("Cuota 2 (visita)", min_value=0.0, step=0.01, format="%.2f", key="cuota_visita")
         oc4, oc5, oc6, oc7 = st.columns(4)
-        cuota_over = oc4.number_input("Cuota +2.5 goles", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-        cuota_under = oc5.number_input("Cuota -2.5 goles", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-        cuota_btts_si = oc6.number_input("Cuota ambos marcan: Si", min_value=0.0, value=0.0, step=0.01, format="%.2f")
-        cuota_btts_no = oc7.number_input("Cuota ambos marcan: No", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+        cuota_over = oc4.number_input("Cuota +2.5 goles", min_value=0.0, step=0.01, format="%.2f", key="cuota_over")
+        cuota_under = oc5.number_input("Cuota -2.5 goles", min_value=0.0, step=0.01, format="%.2f", key="cuota_under")
+        cuota_btts_si = oc6.number_input("Cuota ambos marcan: Si", min_value=0.0, step=0.01, format="%.2f", key="cuota_btts_si")
+        cuota_btts_no = oc7.number_input("Cuota ambos marcan: No", min_value=0.0, step=0.01, format="%.2f", key="cuota_btts_no")
         st.caption("Deja en 0.00 los mercados que no quieras evaluar.")
 
     predecir_click = st.button("\U0001f52e Predecir partido", type="primary", width='stretch')
@@ -300,27 +311,6 @@ with tab_prediccion:
                 with st.container(border=True):
                     st.metric(f"{emoji} {etiqueta}", f"{mk[clave]:.1%}")
                     st.caption(f"cuota justa: {prob_a_cuota(mk[clave])}")
-
-        df_probs = pd.DataFrame({
-            "Resultado": [equipo_local, "Empate", equipo_visita],
-            "Probabilidad": [mk["local"], mk["empate"], mk["visita"]],
-        }).set_index("Resultado")
-        st.bar_chart(df_probs, height=200)
-
-        st.markdown("##### Goles esperados (xG) y otros mercados")
-        g1, g2, g3, g4 = st.columns(4)
-        with g1:
-            with st.container(border=True):
-                st.metric(f"xG {equipo_local}", resultado["xg_local"])
-        with g2:
-            with st.container(border=True):
-                st.metric(f"xG {equipo_visita}", resultado["xg_visita"])
-        with g3:
-            with st.container(border=True):
-                st.metric("+2.5 goles", f"{mk['over_2_5']:.1%}")
-        with g4:
-            with st.container(border=True):
-                st.metric("Ambos marcan", f"{mk['btts_si']:.1%}")
 
         # (mercado, seleccion, probabilidad del modelo, cuota cargada)
         cuotas_dadas = [
@@ -371,6 +361,27 @@ with tab_prediccion:
                       "edge = probabilidad_modelo × cuota − 1. Positivo = el modelo cree que "
                       "la cuota paga mas de lo que deberia. Esto es analisis informativo, "
                       "no una recomendacion de apuesta.")
+
+        df_probs = pd.DataFrame({
+            "Resultado": [equipo_local, "Empate", equipo_visita],
+            "Probabilidad": [mk["local"], mk["empate"], mk["visita"]],
+        }).set_index("Resultado")
+        st.bar_chart(df_probs, height=200)
+
+        st.markdown("##### Goles esperados (xG) y otros mercados")
+        g1, g2, g3, g4 = st.columns(4)
+        with g1:
+            with st.container(border=True):
+                st.metric(f"xG {equipo_local}", resultado["xg_local"])
+        with g2:
+            with st.container(border=True):
+                st.metric(f"xG {equipo_visita}", resultado["xg_visita"])
+        with g3:
+            with st.container(border=True):
+                st.metric("+2.5 goles", f"{mk['over_2_5']:.1%}")
+        with g4:
+            with st.container(border=True):
+                st.metric("Ambos marcan", f"{mk['btts_si']:.1%}")
 
         with st.expander("Desglose de fuerzas (1.00 = promedio de la liga)"):
             local_obj, visita_obj = equipos[equipo_local], equipos[equipo_visita]
