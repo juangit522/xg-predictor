@@ -79,7 +79,7 @@ También vas a ver dos datos extra:
 Si tenés a mano las cuotas que te ofrece tu casa de apuestas para ese partido, podés cargarlas para ver si el modelo detecta una ventaja:
 
 1. Antes de predecir, abrí el desplegable **"Cuotas de la casa de apuestas (opcional, para detectar valor)"**.
-2. Cargá la cuota decimal que viste en tu casa de apuestas para cada mercado que quieras evaluar: Local (1), Empate (X), Visitante (2), Más/Menos de 2.5 goles y Ambos marcan (Sí/No). No hace falta completar todas: las que dejes en 0.00 no se muestran. Si cambiás el equipo local o el visitante, las cuotas se borran solas (vuelven a 0.00) para que no se mezclen con las del partido anterior.
+2. Cargá la cuota decimal que viste en tu casa de apuestas para cada mercado que quieras evaluar: Local (1), Empate (X), Visitante (2), Más/Menos de 2.5 goles y Ambos marcan (Sí/No). No hace falta completar todas: las que dejes en 0.00 no se muestran. Si ese mismo cruce (local vs visitante) ya se jugó en las temporadas cargadas, los campos aparecen **precargados** con las cuotas del último partido entre ellos: las de cierre de Bet365 o, si faltan, el promedio de las casas. Son cuotas de mercado aproximadas de un partido ya jugado, no las de tu casa para el próximo partido: reemplazalas por las tuyas. "Ambos marcan" no viene en los datos y siempre se carga a mano. Si el cruce no está en los datos, o cambiás el equipo local o el visitante, los campos se reinician (precargados o en 0.00) para que no se mezclen con las del partido anterior.
 3. Hacé clic en **"Predecir partido"**.
 4. Justo debajo de las tarjetas de 1X2 va a aparecer la tabla **"Detección de valor"**, con una fila por cada cuota que cargaste:
 

@@ -18,7 +18,7 @@ import streamlit as st
 
 import actualizador
 from actualizador import temporadas_recientes
-from data_loader import LIGAS, RHO_LIGA, cargar
+from data_loader import LIGAS, RHO_LIGA, cargar, cuotas_mercado
 from poisson_model import (
     predecir, prob_a_cuota, K_SHRINK, K_SHRINK_XG, RHO,
     fuerza_ataque_local, fuerza_defensa_local,
@@ -26,13 +26,19 @@ from poisson_model import (
 )
 from elo import elo_desde_partidos
 import config_modelo
+import estilo
 
 st.set_page_config(page_title="xG Predictor", page_icon="⚽", layout="wide")
+estilo.aplicar_css()
 
 NOMBRES_LIGA = {k: v[1] for k, v in LIGAS.items()}
 UMBRAL_VALUE_BET = 0.02  # 2% de ventaja minima para marcar "value bet"
 CLAVES_CUOTAS = ("cuota_local", "cuota_empate", "cuota_visita", "cuota_over",
                  "cuota_under", "cuota_btts_si", "cuota_btts_no")
+# Mercado de cuotas_mercado() -> campo de cuota que precarga
+CAMPO_POR_MERCADO = {"local": "cuota_local", "empate": "cuota_empate",
+                     "visita": "cuota_visita", "over_2_5": "cuota_over",
+                     "under_2_5": "cuota_under"}
 
 
 @st.cache_resource
@@ -57,6 +63,15 @@ def cargar_elo(liga_key, temporadas, fuente, firma):
     partidos = obtener_fuente(fuente).partidos(liga_key, list(temporadas))
     partidos.sort(key=lambda p: (p["fecha"], p["local"]))
     return elo_desde_partidos(partidos)
+
+
+@st.cache_data(show_spinner=False)
+def cargar_cuotas_mercado(liga_key, temporadas, firma):
+    """Cuotas de casas (football-data) del ultimo cruce local-visita."""
+    try:
+        return cuotas_mercado(liga_key, list(temporadas))
+    except SystemExit:
+        return {}  # sin CSV de football-data: quedan para carga manual
 
 
 @st.cache_data(show_spinner=False)
@@ -251,17 +266,39 @@ with tab_prediccion:
         equipo_visita = st.selectbox("✈️ Equipo visitante", opciones_visita, key="sel_visita")
 
     # Las cuotas son de un partido puntual: al cambiar el local o el
-    # visitante se vuelven a 0.00 para no arrastrar las del partido anterior.
-    # Se hace antes de dibujar los number_input (despues Streamlit no deja
-    # tocar su valor via session_state en esta corrida).
-    if st.session_state.get("par_cuotas") != (equipo_local, equipo_visita):
-        st.session_state["par_cuotas"] = (equipo_local, equipo_visita)
+    # visitante (o los datos cargados) se precargan las de ese cruce si esta
+    # en los CSV de football-data, y si no se vuelven a 0.00 para no
+    # arrastrar las del partido anterior. Se hace antes de dibujar los
+    # number_input (despues Streamlit no deja tocar su valor via
+    # session_state en esta corrida).
+    par_actual = (liga_key, temporadas, equipo_local, equipo_visita)
+    if st.session_state.get("par_cuotas") != par_actual:
+        st.session_state["par_cuotas"] = par_actual
         for clave in CLAVES_CUOTAS:
             st.session_state[clave] = 0.0
+        precarga = cargar_cuotas_mercado(liga_key, temporadas, firma).get(
+            (equipo_local, equipo_visita))
+        st.session_state["cuotas_precargadas"] = precarga
+        if precarga:
+            for mercado, (cuota, _) in precarga["cuotas"].items():
+                st.session_state[CAMPO_POR_MERCADO[mercado]] = cuota
 
     with st.expander("Cuotas de la casa de apuestas (opcional, para detectar valor)"):
         st.caption("Si cargas las cuotas decimales que ofrece tu casa de apuestas, "
                   "se compara contra la probabilidad del modelo y se marca si hay ventaja.")
+        precarga = st.session_state.get("cuotas_precargadas")
+        if precarga:
+            origenes = sorted({origen for _, origen in precarga["cuotas"].values()})
+            st.info(f"Precargadas con las cuotas del ultimo {equipo_local} vs "
+                    f"{equipo_visita} en los datos ({precarga['fecha']:%d/%m/%Y}; "
+                    f"{', '.join(origenes)}). Son cuotas de mercado aproximadas "
+                    "de football-data (Bet365 o promedio de casas), no de una casa "
+                    "especifica, y corresponden a ese partido ya jugado: "
+                    "reemplazalas por las de tu casa para el proximo partido. "
+                    "Ambos marcan no viene en los datos y se carga a mano.",
+                    icon="ℹ️")
+        else:
+            st.caption("Este cruce no esta en los datos cargados: carga las cuotas a mano.")
         oc1, oc2, oc3 = st.columns(3)
         cuota_local = oc1.number_input("Cuota 1 (local)", min_value=0.0, step=0.01, format="%.2f", key="cuota_local")
         cuota_empate = oc2.number_input("Cuota X (empate)", min_value=0.0, step=0.01, format="%.2f", key="cuota_empate")
@@ -345,9 +382,9 @@ with tab_prediccion:
 
             def _color_edge(v):
                 if v > 0:
-                    return "color: #1a9e4b; font-weight: bold"
+                    return "color: #2E6A4D; font-weight: bold"
                 if v < 0:
-                    return "color: #d0342c; font-weight: bold"
+                    return "color: #9B3B33; font-weight: bold"
                 return ""
 
             st.dataframe(

@@ -216,6 +216,70 @@ def leer_partidos(ruta, usar_cache=True):
     return partidos
 
 
+# Columnas de cuotas por mercado, en orden de preferencia: cierre antes que
+# apertura, y Bet365 antes que el promedio del mercado (Avg). football-data
+# no publica cuotas de "ambos marcan", asi que ese mercado no se precarga.
+COLUMNAS_CUOTAS = {
+    "local": [("B365CH", "Bet365 cierre"), ("AvgCH", "promedio cierre"),
+              ("B365H", "Bet365 apertura"), ("AvgH", "promedio apertura")],
+    "empate": [("B365CD", "Bet365 cierre"), ("AvgCD", "promedio cierre"),
+               ("B365D", "Bet365 apertura"), ("AvgD", "promedio apertura")],
+    "visita": [("B365CA", "Bet365 cierre"), ("AvgCA", "promedio cierre"),
+               ("B365A", "Bet365 apertura"), ("AvgA", "promedio apertura")],
+    "over_2_5": [("B365C>2.5", "Bet365 cierre"), ("AvgC>2.5", "promedio cierre"),
+                 ("B365>2.5", "Bet365 apertura"), ("Avg>2.5", "promedio apertura")],
+    "under_2_5": [("B365C<2.5", "Bet365 cierre"), ("AvgC<2.5", "promedio cierre"),
+                  ("B365<2.5", "Bet365 apertura"), ("Avg<2.5", "promedio apertura")],
+}
+
+
+def cuotas_mercado(liga_key, temporadas):
+    """{(local, visita): {"fecha", "cuotas": {mercado: (cuota, origen)}}}.
+
+    Lee las cuotas de casas de los CSV de football-data (los mismos que ya
+    estan en cache) y, por cada cruce local-visita, guarda el partido mas
+    reciente. Solo hay partidos ya jugados: son cuotas historicas de ese
+    cruce, no del proximo partido. No interviene en el modelo.
+    """
+    codigo, _ = LIGAS[liga_key]
+    resultado = {}
+    for temp in temporadas:
+        ruta = descargar_csv(codigo, temp)
+        with open(ruta, "rb") as f:
+            crudo = f.read()
+        texto = None
+        for enc in ("utf-8-sig", "cp1252", "latin-1"):
+            try:
+                texto = crudo.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if texto is None:
+            continue
+        for fila in csv.DictReader(texto.splitlines()):
+            local = (fila.get("HomeTeam") or "").strip()
+            visita = (fila.get("AwayTeam") or "").strip()
+            fecha = parsear_fecha(fila.get("Date") or "")
+            if not local or not visita or fecha is None:
+                continue
+            cuotas = {}
+            for mercado, columnas in COLUMNAS_CUOTAS.items():
+                for columna, origen in columnas:
+                    try:
+                        cuota = float((fila.get(columna) or "").strip())
+                    except ValueError:
+                        continue
+                    if cuota > 1.0:
+                        cuotas[mercado] = (cuota, origen)
+                        break
+            if not cuotas:
+                continue
+            previo = resultado.get((local, visita))
+            if previo is None or fecha > previo["fecha"]:
+                resultado[(local, visita)] = {"fecha": fecha, "cuotas": cuotas}
+    return resultado
+
+
 def parsear_fecha(texto):
     """El CSV usa dd/mm/yyyy en archivos recientes y dd/mm/yy en los viejos."""
     texto = texto.strip()

@@ -10,18 +10,45 @@ gatherUsageStats = false
 [client]
 toolbarMode = "viewer"
 
-# Tema oscuro. primaryColor es un verde-azulado elegido por contraste:
-# Streamlit escribe en BLANCO sobre el boton primario, y los tonos mas
-# brillantes (#00C9A7) dejan ese texto en 2.1:1, ilegible. #0D9488 da
-# 3.7:1 con el blanco y 5:1 sobre el fondo.
+# Tema "Pizarra de analista", el mismo del NFL Predictor para que ambas
+# apps se vean como un solo sistema: papel crema, tinta casi negra y un
+# unico acento color cuero. El CSS complementario vive en estilo.py.
 [theme]
-base = "dark"
-primaryColor = "#0D9488"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#1E232A"
-textColor = "#E6EDF3"
-font = "sans-serif"
-borderColor = "#2D333B"
-baseRadius = "0.6rem"
+base = "light"
+primaryColor = "#8C4A2A"              # cuero: unico acento
+backgroundColor = "#FAF9F6"           # papel crema
+secondaryBackgroundColor = "#F2EEE7"  # campos de formulario, tabs
+textColor = "#1D1F22"                 # tinta
+linkColor = "#8C4A2A"
+borderColor = "#E8E4DC"
+dataframeBorderColor = "#ECE8E0"
+dataframeHeaderBackgroundColor = "#F5F2EC"
+showWidgetBorder = true
+baseRadius = "10px"
+buttonRadius = "8px"
+font = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+headingFont = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+metricValueFontWeight = 700
+
+# Colores semanticos apagados (alertas, estados): verde y rojo discretos
+greenColor = "#2E6A4D"
+greenBackgroundColor = "#EEF5F0"
+greenTextColor = "#2E6A4D"
+redColor = "#9B3B33"
+redBackgroundColor = "#F8EDEB"
+redTextColor = "#9B3B33"
+yellowColor = "#B07A1E"
+yellowBackgroundColor = "#FBF3E2"
+yellowTextColor = "#8A5A12"
+blueColor = "#4A5A6A"
+blueBackgroundColor = "#F1F2F2"
+blueTextColor = "#3F4A55"
+grayColor = "#6E6A63"
 # El grafico 1X2 usa el primer color: que coincida con el acento.
-chartCategoricalColors = ["#14B8A6", "#3B82F6", "#F59E0B", "#EC4899", "#A78BFA"]
+chartCategoricalColors = ["#8C4A2A", "#6E6A63", "#2E6A4D", "#B07A1E", "#4A5A6A"]
+
+[theme.sidebar]
+backgroundColor = "#F3F0EA"
+secondaryBackgroundColor = "#FFFFFF"
+borderColor = "#E3DED4"
