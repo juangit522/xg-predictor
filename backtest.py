@@ -20,7 +20,7 @@ from datetime import datetime
 from math import exp, log
 
 from poisson_model import Liga, Equipo, calcular_xg, matriz_marcadores, MAX_GOLES
-from data_loader import LIGAS, descargar_csv, leer_partidos, parsear_fecha, tiene_xg
+from data_loader import LIGAS, XI, descargar_csv, leer_partidos, parsear_fecha, tiene_xg
 from disponibilidad import Plantilla, factores, aplicar, es_titular
 from elo import RatingElo, elo_a_probabilidades
 from logging_setup import get_logger
@@ -859,8 +859,11 @@ def main():
     temporadas = args.temporadas or temporadas_por_defecto(3)
     etiqueta = "{} | {}".format("+".join(ligas), " ".join(temporadas))
 
-    # Ambos barridos especializados trabajan sobre el modelo de xG
-    if args.disponibilidad or args.dixon_coles:
+    # Ambos barridos especializados trabajan sobre el modelo de xG, salvo
+    # Dixon-Coles en ligas sin xG (Eredivisie, Super Lig): ahi se calibra
+    # sobre goles, que es como las usa la app.
+    dc_goles = args.dixon_coles and not any(tiene_xg(l) for l in ligas)
+    if (args.disponibilidad or args.dixon_coles) and not dc_goles:
         args.fuente = "understat"
 
     # Eredivisie / Super Lig no tienen xG: fuera de los barridos con xG
@@ -921,10 +924,12 @@ def main():
                 {"ligas": ligas, "temporadas": temporadas, "n_partidos": r_opt["n"],
                  "rps": round(r_opt["rps"], 6)})
     elif args.dixon_coles:
-        resultados = barrer_dixon_coles(grupos, evaluables, XI_OPT,
-                                        args.k_grid, W_OPT, args.rho_grid)
+        # Con goles: xi de data_loader y w=1 (solo goles), lo que usa la app
+        xi_dc, w_dc = (XI, 1.0) if dc_goles else (XI_OPT, W_OPT)
+        resultados = barrer_dixon_coles(grupos, evaluables, xi_dc,
+                                        args.k_grid, w_dc, args.rho_grid)
         imprimir_reporte_dc(resultados, baselines, args.k_grid, args.rho_grid,
-                            XI_OPT, W_OPT, etiqueta)
+                            xi_dc, w_dc, etiqueta)
         if args.guardar_config:
             (k_opt, rho_opt), r_opt = min(resultados.items(), key=lambda kv: kv[1]["rps"])
             config_modelo.guardar_config(

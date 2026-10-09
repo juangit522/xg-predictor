@@ -50,7 +50,13 @@ XI = 0.001
 # el valor exacto no. Si dudas, usa el agrupado (RHO = -0.12).
 # ligue1 todavia no tiene backtest --dixon-coles propio: usa el agrupado
 # (RHO) hasta que se calibre, en vez de inventar un numero.
-RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18}
+# eredivisie y superlig se calibraron sobre goles (no tienen xG), con
+# xi=0.001 y w=1 como las usa la app, temporadas 2324-2526:
+#   eredivisie: superficie plana de -0.15 a -0.27 (optimo -0.24, +0.0001
+#     de RPS); se fija -0.18, el tope de la rejilla, como la Bundesliga.
+#   superlig: -0.09, sesgo de empate -0.3%. Superficie muy plana.
+RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18,
+            "eredivisie": -0.18, "superlig": -0.09}
 
 # Codigos de division de football-data.co.uk para nuestras ligas
 LIGAS = {
