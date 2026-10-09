@@ -215,8 +215,17 @@ check("en_curso: temporadas viejas no",
 check("en_curso: en julio nada esta en curso",
       not actualizador.en_curso(("2627",), dt(2027, 7, 1)))
 
-check("tareas_app cubre 4 ligas csv + 12 combinaciones xG",
-      len(actualizador.tareas_app()) == 16, str(len(actualizador.tareas_app())))
+check("tareas_app cubre 6 ligas csv + 12 combinaciones xG (4 ligas con xG)",
+      len(actualizador.tareas_app()) == 18, str(len(actualizador.tareas_app())))
+
+check("tareas_app no pide xG para Eredivisie ni Super Lig",
+      not [t for t in actualizador.tareas_app()
+           if t[0] in ("eredivisie", "superlig") and t[2] == "understat"])
+
+from data_loader import cargar
+_, _, _, n_ered = cargar("eredivisie", ["2526"], fuente="understat")
+check("pedir xG para una liga sin xG cae a solo goles sin romperse",
+      n_ered > 0, str(n_ered))
 
 print("=" * 66)
 if fallos:

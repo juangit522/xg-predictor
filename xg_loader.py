@@ -640,7 +640,7 @@ def cargar_jugadores(ligas, temporadas, refrescar=False):
 
 def main():
     ap = argparse.ArgumentParser(description="Carga xG de Understat")
-    ap.add_argument("--liga", default="premier", choices=list(LIGAS))
+    ap.add_argument("--liga", default="premier", choices=list(LIGAS_UNDERSTAT))
     ap.add_argument("--todas", action="store_true")
     ap.add_argument("--temporadas", nargs="+", default=["2324", "2425", "2526"])
     ap.add_argument("--refrescar", action="store_true", help="ignora el cache local")
@@ -651,7 +651,7 @@ def main():
                          "sin descargar nada mas. Correr antes de una temporada nueva.")
     args = ap.parse_args()
 
-    ligas = list(LIGAS) if args.todas else [args.liga]
+    ligas = list(LIGAS_UNDERSTAT) if args.todas else [args.liga]
 
     if args.diagnostico:
         diagnosticar_alias(ligas, args.temporadas)

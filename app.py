@@ -18,7 +18,7 @@ import streamlit as st
 
 import actualizador
 from actualizador import temporadas_recientes
-from data_loader import LIGAS, RHO_LIGA, cargar, cuotas_mercado
+from data_loader import LIGAS, RHO_LIGA, cargar, cuotas_mercado, tiene_xg
 from poisson_model import (
     predecir, prob_a_cuota, K_SHRINK, K_SHRINK_XG, RHO,
     fuerza_ataque_local, fuerza_defensa_local,
@@ -142,11 +142,18 @@ with st.sidebar:
     liga_key = st.selectbox(
         "Competicion", options=list(LIGAS.keys()),
         format_func=lambda k: NOMBRES_LIGA[k])
+    # Ligas sin xG en Understat (Eredivisie, Super Lig): solo goles, fijo
+    con_xg_disponible = tiene_xg(liga_key)
     fuente = st.radio(
-        "Fuente de datos", options=["understat", "csv"],
+        "Fuente de datos",
+        options=["understat", "csv"] if con_xg_disponible else ["csv"],
         format_func=lambda f: "xG real (Understat)" if f == "understat" else "Solo goles (football-data)",
+        disabled=not con_xg_disponible,
         help="xG real es mas preciso (menos ruido) pero requiere que el "
              "partido este en el cache de Understat o poder descargarlo.")
+    if not con_xg_disponible:
+        st.caption(f"{NOMBRES_LIGA[liga_key]} no tiene xG en Understat: "
+                   "se usa solo goles.")
     n_temporadas = st.select_slider("Temporadas a usar", options=[1, 2, 3], value=3)
     temporadas = tuple(temporadas_recientes(n_temporadas))
     st.caption("Temporadas: " + ", ".join(

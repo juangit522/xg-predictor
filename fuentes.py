@@ -47,6 +47,10 @@ class FuenteUnderstat(FuenteDatos):
     nombre = "understat"
 
     def partidos(self, liga_key, temporadas, forzar=False):
+        from data_loader import fuente_efectiva
+        if fuente_efectiva(liga_key, self.nombre) != self.nombre:
+            # Liga sin xG en Understat: solo goles en vez de un KeyError
+            return FuenteCSV().partidos(liga_key, temporadas, forzar=forzar)
         from xg_loader import cargar_xg
         return cargar_xg([liga_key], temporadas, refrescar=forzar)
 

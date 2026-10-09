@@ -32,7 +32,7 @@ import threading
 import time
 from datetime import datetime
 
-from data_loader import LIGAS, CACHE_DIR
+from data_loader import LIGAS, CACHE_DIR, fuente_efectiva, tiene_xg
 from logging_setup import get_logger
 
 logger = get_logger("actualizador")
@@ -85,7 +85,7 @@ def etiqueta(tarea):
 
 
 def rutas_cache(liga, temporadas, fuente):
-    if fuente == "understat":
+    if fuente_efectiva(liga, fuente) == "understat":
         from xg_loader import ruta_cache
         return [ruta_cache(liga, temporadas)]
     codigo, _ = LIGAS[liga]
@@ -117,7 +117,7 @@ def tareas_app():
     """
     completas = tuple(temporadas_recientes(MAX_TEMPORADAS))
     tareas = [(liga, completas, "csv") for liga in LIGAS]
-    for liga in LIGAS:
+    for liga in filter(tiene_xg, LIGAS):
         for n in range(1, MAX_TEMPORADAS + 1):
             tareas.append((liga, tuple(temporadas_recientes(n)), "understat"))
     return tareas

@@ -20,7 +20,7 @@ from datetime import datetime
 from math import exp, log
 
 from poisson_model import Liga, Equipo, calcular_xg, matriz_marcadores, MAX_GOLES
-from data_loader import LIGAS, descargar_csv, leer_partidos, parsear_fecha
+from data_loader import LIGAS, descargar_csv, leer_partidos, parsear_fecha, tiene_xg
 from disponibilidad import Plantilla, factores, aplicar, es_titular
 from elo import RatingElo, elo_a_probabilidades
 from logging_setup import get_logger
@@ -862,6 +862,15 @@ def main():
     # Ambos barridos especializados trabajan sobre el modelo de xG
     if args.disponibilidad or args.dixon_coles:
         args.fuente = "understat"
+
+    # Eredivisie / Super Lig no tienen xG: fuera de los barridos con xG
+    if args.fuente == "understat":
+        sin_xg = [l for l in ligas if not tiene_xg(l)]
+        ligas = [l for l in ligas if tiene_xg(l)]
+        if not ligas:
+            raise SystemExit("  [error] {} no tiene xG en Understat: usa --fuente csv".format(
+                ", ".join(sin_xg)))
+        etiqueta = "{} | {}".format("+".join(ligas), " ".join(temporadas))
 
     # Sin xG real la dimension w no aporta nada: la colapsamos
     w_grid = args.w_grid or (W_GRID if args.fuente == "understat" else [1.0])

@@ -58,7 +58,27 @@ LIGAS = {
     "laliga": ("SP1", "LaLiga"),
     "bundesliga": ("D1", "Bundesliga"),
     "ligue1": ("F1", "Ligue 1"),
+    "eredivisie": ("N1", "Eredivisie (Países Bajos)"),
+    "superlig": ("T1", "Süper Lig (Turquía)"),
 }
+
+
+def tiene_xg(liga_key):
+    """True si la liga tiene xG en Understat (ver xg_loader.LIGAS_UNDERSTAT).
+
+    Las que no (Eredivisie, Süper Lig) solo funcionan con fuente="csv":
+    quien pida "understat" para ellas cae a solo goles (ver fuente_efectiva).
+    """
+    from xg_loader import LIGAS_UNDERSTAT
+    return liga_key in LIGAS_UNDERSTAT
+
+
+def fuente_efectiva(liga_key, fuente):
+    """La fuente que realmente se puede usar: "understat" sin xG -> "csv"."""
+    if fuente == "understat" and not tiene_xg(liga_key):
+        logger.warning("%s no tiene xG en Understat: se usa solo goles (csv)", liga_key)
+        return "csv"
+    return fuente
 
 
 # ----------------------------------------------------------------------
@@ -443,6 +463,7 @@ def cargar(liga_key, temporadas, xi=XI, w_mix=1.0, fuente="csv", forzar=False):
             liga_key, ", ".join(LIGAS)))
 
     _, nombre_liga = LIGAS[liga_key]
+    fuente = fuente_efectiva(liga_key, fuente)
 
     from fuentes import obtener_fuente
     proveedor = obtener_fuente(fuente)
@@ -544,7 +565,7 @@ def imprimir_tabla(liga, equipos, crudos, n_partidos, xi, k, w_mix=1.0, rho=0.0)
 def main():
     ap = argparse.ArgumentParser(description="Predictor Poisson con datos reales")
     ap.add_argument("--liga", default="premier", choices=list(LIGAS),
-                    help="premier | laliga | bundesliga | ligue1")
+                    help=" | ".join(LIGAS))
     ap.add_argument("--temporadas", nargs="+", default=None,
                     help="codigos de temporada, ej: 2526 2425 (por defecto la ultima completa)")
     ap.add_argument("--local", help="equipo local")
@@ -572,7 +593,8 @@ def main():
     # Defaults: primero lo calibrado por backtest.py --guardar-config (si
     # existe y no esta vencido), si no las constantes hardcodeadas de
     # siempre. Dependen de la fuente: con xG la senal es menos ruidosa y
-    # hace falta menos shrinkage.
+    # hace falta menos shrinkage. Una liga sin xG cae a solo goles.
+    args.fuente = fuente_efectiva(args.liga, args.fuente)
     con_xg = args.fuente == "understat"
     defaults_principal = {
         "xi": XI, "k": (K_SHRINK_XG if con_xg else K_SHRINK), "w": (0.0 if con_xg else 1.0),
