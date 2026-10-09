@@ -48,8 +48,9 @@ XI = 0.001
 # sin corregir) y LaLiga la que menos (-1.0%).
 # Son estimaciones sobre ~950 partidos por liga: la direccion es solida,
 # el valor exacto no. Si dudas, usa el agrupado (RHO = -0.12).
-# ligue1 todavia no tiene backtest --dixon-coles propio: usa el agrupado
-# (RHO) hasta que se calibre, en vez de inventar un numero.
+# ligue1: 0.0 calibrado con xG (2324-2526, 807 partidos). Sin correccion
+#   el modelo ya predice +0.9% de empates; con el agrupado (-0.12) eran
+#   +3.6% y peor RPS. Superficie plana de +0.09 a -0.03: se fija 0.0.
 # eredivisie y superlig se calibraron sobre goles (no tienen xG), con
 # xi=0.001 y w=1 como las usa la app, temporadas 2324-2526:
 #   eredivisie: superficie plana de -0.15 a -0.27 (optimo -0.24, +0.0001
@@ -57,7 +58,7 @@ XI = 0.001
 #   superlig: -0.09, sesgo de empate -0.3%. Superficie muy plana.
 # seriea: -0.12 calibrado con xG (2324-2526, 1009 partidos): sesgo de
 #   empate -0.3%; -0.09 a -0.12 empatan en RPS tambien con k=6.
-RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18,
+RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18, "ligue1": 0.0,
             "eredivisie": -0.18, "superlig": -0.09, "seriea": -0.12}
 
 # Codigos de division de football-data.co.uk para nuestras ligas
