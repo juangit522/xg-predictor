@@ -55,8 +55,9 @@ XI = 0.001
 #   eredivisie: superficie plana de -0.15 a -0.27 (optimo -0.24, +0.0001
 #     de RPS); se fija -0.18, el tope de la rejilla, como la Bundesliga.
 #   superlig: -0.09, sesgo de empate -0.3%. Superficie muy plana.
+# seriea: provisional, el agrupado (RHO) hasta correr su --dixon-coles.
 RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18,
-            "eredivisie": -0.18, "superlig": -0.09}
+            "eredivisie": -0.18, "superlig": -0.09, "seriea": -0.12}
 
 # Codigos de division de football-data.co.uk para nuestras ligas
 LIGAS = {
@@ -64,6 +65,7 @@ LIGAS = {
     "laliga": ("SP1", "LaLiga"),
     "bundesliga": ("D1", "Bundesliga"),
     "ligue1": ("F1", "Ligue 1"),
+    "seriea": ("I1", "Serie A (Italia)"),
     "eredivisie": ("N1", "Eredivisie (Países Bajos)"),
     "superlig": ("T1", "Süper Lig (Turquía)"),
 }

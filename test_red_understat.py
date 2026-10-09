@@ -215,8 +215,12 @@ check("en_curso: temporadas viejas no",
 check("en_curso: en julio nada esta en curso",
       not actualizador.en_curso(("2627",), dt(2027, 7, 1)))
 
-check("tareas_app cubre 6 ligas csv + 12 combinaciones xG (4 ligas con xG)",
-      len(actualizador.tareas_app()) == 18, str(len(actualizador.tareas_app())))
+check("tareas_app cubre 7 ligas csv + 15 combinaciones xG (5 ligas con xG)",
+      len(actualizador.tareas_app()) == 22, str(len(actualizador.tareas_app())))
+
+check("tareas_app pide xG para la Serie A en sus 3 combinaciones",
+      len([t for t in actualizador.tareas_app()
+           if t[0] == "seriea" and t[2] == "understat"]) == 3)
 
 check("tareas_app no pide xG para Eredivisie ni Super Lig",
       not [t for t in actualizador.tareas_app()

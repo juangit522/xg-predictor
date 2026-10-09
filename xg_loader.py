@@ -52,6 +52,7 @@ LIGAS_UNDERSTAT = {
     "laliga": "ESP-La Liga",
     "bundesliga": "GER-Bundesliga",
     "ligue1": "FRA-Ligue 1",
+    "seriea": "ITA-Serie A",  # Understat: Serie_A
 }
 
 # ----------------------------------------------------------------------
