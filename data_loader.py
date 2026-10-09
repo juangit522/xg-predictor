@@ -55,7 +55,8 @@ XI = 0.001
 #   eredivisie: superficie plana de -0.15 a -0.27 (optimo -0.24, +0.0001
 #     de RPS); se fija -0.18, el tope de la rejilla, como la Bundesliga.
 #   superlig: -0.09, sesgo de empate -0.3%. Superficie muy plana.
-# seriea: provisional, el agrupado (RHO) hasta correr su --dixon-coles.
+# seriea: -0.12 calibrado con xG (2324-2526, 1009 partidos): sesgo de
+#   empate -0.3%; -0.09 a -0.12 empatan en RPS tambien con k=6.
 RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18,
             "eredivisie": -0.18, "superlig": -0.09, "seriea": -0.12}
 
