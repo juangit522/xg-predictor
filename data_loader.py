@@ -58,8 +58,26 @@ XI = 0.001
 #   superlig: -0.09, sesgo de empate -0.3%. Superficie muy plana.
 # seriea: -0.12 calibrado con xG (2324-2526, 1009 partidos): sesgo de
 #   empate -0.3%; -0.09 a -0.12 empatan en RPS tambien con k=6.
+# Ligas agregadas sin xG: calibradas igual que eredivisie/superlig
+# (backtest.py --dixon-coles, goles, xi=0.001, w=1, 2324-2526). Las
+# superficies son planas: el RPS cambia en el 4o decimal en toda la rejilla.
+#   championship: 0.0 calibrado (1500 evaluables); sin correccion el sesgo
+#     de empate ya es -0.3% y todo rho negativo lo empeora.
+#   leagueone: 0.0 calibrado (1455); sesgo +0.7% sin corregir.
+#   escocia: -0.03 (620 evaluables, de las mas chicas); sesgo -0.6% -> +0.1%.
+#   bundesliga2: -0.09 (779); sesgo -2.1% -> -0.3%.
+#   serieb: -0.18, el tope de la rejilla (952): el optimo sigue mas alla
+#     (sesgo -5.3% -> -0.8%); se fija el tope, como eredivisie y bundesliga.
+#   laliga2: -0.03 (1211); sesgo -0.9% -> -0.2%.
+#   ligue2: -0.03 (829); sesgo -1.1% -> -0.3%.
+#   belgica: -0.09 (840); sesgo -2.5% -> -0.5%. Superficie casi plana.
+#   portugal: -0.15 (803); sesgo -3.2% -> -0.1%.
+#   grecia: -0.03 (620, de las mas chicas); sesgo -0.8% -> -0.2%.
 RHO_LIGA = {"premier": -0.12, "laliga": -0.06, "bundesliga": -0.18, "ligue1": 0.0,
-            "eredivisie": -0.18, "superlig": -0.09, "seriea": -0.12}
+            "eredivisie": -0.18, "superlig": -0.09, "seriea": -0.12,
+            "championship": 0.0, "leagueone": 0.0, "escocia": -0.03,
+            "bundesliga2": -0.09, "serieb": -0.18, "laliga2": -0.03,
+            "ligue2": -0.03, "belgica": -0.09, "portugal": -0.15, "grecia": -0.03}
 
 # Codigos de division de football-data.co.uk para nuestras ligas
 LIGAS = {
@@ -70,6 +88,17 @@ LIGAS = {
     "seriea": ("I1", "Serie A (Italia)"),
     "eredivisie": ("N1", "Eredivisie (Países Bajos)"),
     "superlig": ("T1", "Süper Lig (Turquía)"),
+    # Sin xG en Understat: solo goles, como la Eredivisie y la Süper Lig
+    "championship": ("E1", "Championship (Inglaterra)"),
+    "leagueone": ("E2", "League One (Inglaterra)"),
+    "escocia": ("SC0", "Scottish Premiership (Escocia)"),
+    "bundesliga2": ("D2", "Bundesliga 2 (Alemania)"),
+    "serieb": ("I2", "Serie B (Italia)"),
+    "laliga2": ("SP2", "La Liga 2 (España)"),
+    "ligue2": ("F2", "Ligue 2 (Francia)"),
+    "belgica": ("B1", "Jupiler Pro League (Bélgica)"),
+    "portugal": ("P1", "Primeira Liga (Portugal)"),
+    "grecia": ("G1", "Super League (Grecia)"),
 }
 
 
